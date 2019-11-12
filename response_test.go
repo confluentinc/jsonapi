@@ -3,6 +3,7 @@ package jsonapi
 import (
 	"bytes"
 	"encoding/json"
+	"math"
 	"reflect"
 	"sort"
 	"testing"
@@ -438,6 +439,36 @@ func TestSupportsAttributes(t *testing.T) {
 	}
 
 	if data.Attributes["title"] != "Title 1" {
+		t.Fatalf("Attributes hash not populated using tags correctly")
+	}
+}
+
+func TestSupportsJsonMarshaledAttributes(t *testing.T) {
+	tt := time.Now()
+	nanos := tt.UnixNano()
+	testModel := &Post{
+		ID:          5,
+		Title:       "Title 1",
+		PublishedAt: &EpochTime{Seconds: nanos / int64(time.Second), Nanos: int32(math.Mod(float64(nanos), float64(time.Second)))},
+	}
+
+	out := bytes.NewBuffer(nil)
+	if err := MarshalPayload(out, testModel); err != nil {
+		t.Fatal(err)
+	}
+
+	resp := new(OnePayload)
+	if err := json.NewDecoder(out).Decode(resp); err != nil {
+		t.Fatal(err)
+	}
+
+	data := resp.Data
+
+	if data.Attributes == nil {
+		t.Fatalf("Expected attributes")
+	}
+
+	if data.Attributes["published_at"] != tt.Format(time.RFC3339) {
 		t.Fatalf("Attributes hash not populated using tags correctly")
 	}
 }

@@ -1,6 +1,7 @@
 package jsonapi
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -40,13 +41,52 @@ type Car struct {
 
 type Post struct {
 	Blog
-	ID            uint64     `jsonapi:"primary,posts"`
-	BlogID        int        `jsonapi:"attr,blog_id"`
-	ClientID      string     `jsonapi:"client-id"`
-	Title         string     `jsonapi:"attr,title"`
-	Body          string     `jsonapi:"attr,body"`
-	Comments      []*Comment `jsonapi:"relation,comments"`
-	LatestComment *Comment   `jsonapi:"relation,latest_comment"`
+	ID            uint64     `jsonapi:"primary,posts"             json:"id"`
+	BlogID        int        `jsonapi:"attr,blog_id"              json:"-"`
+	ClientID      string     `jsonapi:"client-id"                 json:"-"`
+	Title         string     `jsonapi:"attr,title"                json:"title"`
+	Body          string     `jsonapi:"attr,body"                 json:"body"`
+	PublishedAt   *EpochTime `jsonapi:"attr,published_at,jsonify" json:"published_at"`
+	Comments      []*Comment `jsonapi:"relation,comments"         json:"-"`
+	LatestComment *Comment   `jsonapi:"relation,latest_comment"   json:"-"`
+}
+
+// Obviously you're unlikely to do this, but protobuf does... so test it here
+// See https://github.com/golang/protobuf/blob/master/ptypes/timestamp/timestamp.pb.go
+type EpochTime struct {
+	Seconds int64
+	Nanos   int32
+}
+
+func (p *Post) MarshalJSON() ([]byte, error) {
+	publishedAt := time.Unix(p.PublishedAt.Seconds, int64(p.PublishedAt.Nanos))
+	type Alias Post
+	return json.Marshal(&struct {
+		PublishedAt string `json:"published_at"`
+		*Alias
+	}{
+		PublishedAt: publishedAt.Format(time.RFC3339),
+		Alias:       (*Alias)(p),
+	})
+}
+
+func (p *Post) UnmarshalJSON(data []byte) error {
+	type Alias Post
+	aux := &struct {
+		PublishedAt string `json:"published_at"`
+		*Alias
+	}{
+		Alias: (*Alias)(p),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	t, err := time.Parse(time.RFC3339, aux.PublishedAt)
+	if err != nil {
+		return err
+	}
+	p.PublishedAt = &EpochTime{Seconds: int64(t.Second()), Nanos: int32(t.Nanosecond())}
+	return nil
 }
 
 type Comment struct {

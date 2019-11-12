@@ -205,6 +205,9 @@ func visitModelNode(model interface{}, included *map[string]*Node,
 	modelValue := value.Elem()
 	modelType := value.Type().Elem()
 
+	// Nil until an attribute is tagged 'jsonify'
+	var jsonModel map[string]interface{}
+
 	for i := 0; i < modelValue.NumField(); i++ {
 		structField := modelValue.Type().Field(i)
 		tag := structField.Tag.Get(annotationJSONAPI)
@@ -283,7 +286,7 @@ func visitModelNode(model interface{}, included *map[string]*Node,
 				node.ClientID = clientID
 			}
 		} else if annotation == annotationAttribute {
-			var omitEmpty, iso8601 bool
+			var omitEmpty, iso8601, jsonify bool
 
 			if len(args) > 2 {
 				for _, arg := range args[2:] {
@@ -292,6 +295,8 @@ func visitModelNode(model interface{}, included *map[string]*Node,
 						omitEmpty = true
 					case annotationISO8601:
 						iso8601 = true
+					case annotationJsonify:
+						jsonify = true
 					}
 				}
 			}
@@ -342,11 +347,28 @@ func visitModelNode(model interface{}, included *map[string]*Node,
 					continue
 				}
 
-				strAttr, ok := fieldValue.Interface().(string)
-				if ok {
-					node.Attributes[args[1]] = strAttr
+				if jsonify {
+					if jsonModel == nil {
+						b, err := json.Marshal(model)
+						if err != nil {
+							er = err
+							break
+						}
+						jsonModel = make(map[string]interface{})
+						err = json.Unmarshal(b, &jsonModel)
+						if err != nil {
+							er = err
+							break
+						}
+					}
+					node.Attributes[args[1]] = jsonModel[args[1]]
 				} else {
-					node.Attributes[args[1]] = fieldValue.Interface()
+					strAttr, ok := fieldValue.Interface().(string)
+					if ok {
+						node.Attributes[args[1]] = strAttr
+					} else {
+						node.Attributes[args[1]] = fieldValue.Interface()
+					}
 				}
 			}
 		} else if annotation == annotationRelation {
