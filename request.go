@@ -189,7 +189,7 @@ func unmarshalNode(data *Node, model reflect.Value, included *map[string]*Node) 
 				break
 			}
 
-			// ID will have to be transmitted as astring per the JSON API spec
+			// ID will have to be transmitted as a string per the JSON API spec
 			v := reflect.ValueOf(data.ID)
 
 			// Deal with PTRS
@@ -247,7 +247,7 @@ func unmarshalNode(data *Node, model reflect.Value, included *map[string]*Node) 
 			}
 
 			structField := fieldType
-			value, err := unmarshalAttribute(attribute, args, structField, fieldValue)
+			value, err := unmarshalAttribute(attributes, model, attribute, i, args, structField, fieldValue)
 			if err != nil {
 				er = err
 				break
@@ -380,12 +380,31 @@ func assignValue(field, value reflect.Value) {
 }
 
 func unmarshalAttribute(
+	attributes map[string]interface{},
+	model reflect.Value,
 	attribute interface{},
+	attributeIndex int,
 	args []string,
 	structField reflect.StructField,
 	fieldValue reflect.Value) (value reflect.Value, err error) {
 	value = reflect.ValueOf(attribute)
 	fieldType := structField.Type
+
+	jsonify := false
+	if len(args) > 2 {
+		for _, arg := range args[2:] {
+			switch arg {
+			case annotationJsonify:
+				jsonify = true
+			}
+		}
+	}
+
+	// Handle field annotated with `jsonify`
+	if jsonify {
+		value, err = handleJsonify(attributes, model, attributeIndex)
+		return
+	}
 
 	// Handle field of type []string
 	if fieldValue.Type() == reflect.TypeOf([]string{}) {
@@ -432,6 +451,19 @@ func unmarshalAttribute(
 	}
 
 	return
+}
+
+func handleJsonify(data map[string]interface{}, model reflect.Value, fieldIndex int) (reflect.Value, error) {
+	b, err := json.Marshal(data)
+	if err != nil {
+		return reflect.Value{}, err
+	}
+	jsonModel := model.Interface()
+	err = json.Unmarshal(b, jsonModel)
+	if err != nil {
+		return reflect.Value{}, err
+	}
+	return reflect.ValueOf(jsonModel).Elem().Field(fieldIndex), nil
 }
 
 func handleStringSlice(attribute interface{}) (reflect.Value, error) {

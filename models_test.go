@@ -3,6 +3,7 @@ package jsonapi
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"time"
 )
 
@@ -82,10 +83,11 @@ func (p *Post) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	t, err := time.Parse(time.RFC3339, aux.PublishedAt)
+	nanos := t.UnixNano()
 	if err != nil {
 		return err
 	}
-	p.PublishedAt = &EpochTime{Seconds: int64(t.Second()), Nanos: int32(t.Nanosecond())}
+	p.PublishedAt = &EpochTime{Seconds: nanos/int64(time.Second), Nanos: int32(math.Mod(float64(nanos), float64(time.Second)))}
 	return nil
 }
 

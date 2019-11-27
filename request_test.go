@@ -332,6 +332,36 @@ func TestUnmarshalSetsAttrs(t *testing.T) {
 	}
 }
 
+func TestUnmarshalSupportsJsonMarshaledAttributes(t *testing.T) {
+	payload := &OnePayload{
+		Data: &Node{
+			Type: "posts",
+			ID: "5",
+			Attributes: map[string]interface{}{
+				"published_at": "2016-08-17T08:27:12Z",
+			},
+		},
+	}
+
+	in := bytes.NewBuffer(nil)
+	if err := json.NewEncoder(in).Encode(payload); err != nil {
+		t.Fatal(err)
+	}
+
+	out := new(Post)
+
+	if err := UnmarshalPayload(in, out); err != nil {
+		t.Fatal(err)
+	}
+
+	expected := time.Date(2016, 8, 17, 8, 27, 12, 0, time.UTC)
+	actual := time.Unix(out.PublishedAt.Seconds, int64(out.PublishedAt.Nanos))
+
+	if !actual.Equal(expected) {
+		t.Fatal("Parsing the ISO8601 timestamp failed")
+	}
+}
+
 func TestUnmarshalParsesISO8601(t *testing.T) {
 	payload := &OnePayload{
 		Data: &Node{
