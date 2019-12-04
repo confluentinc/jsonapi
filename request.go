@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	ptypes "github.com/gogo/protobuf/types"
 )
 
 const (
@@ -395,7 +397,8 @@ func unmarshalAttribute(
 
 	// Handle field of type time.Time
 	if fieldValue.Type() == reflect.TypeOf(time.Time{}) ||
-		fieldValue.Type() == reflect.TypeOf(new(time.Time)) {
+		fieldValue.Type() == reflect.TypeOf(new(time.Time)) ||
+		fieldValue.Type() == reflect.TypeOf(new(ptypes.Timestamp)) {
 		value, err = handleTime(attribute, args, fieldValue)
 		return
 	}
@@ -457,23 +460,43 @@ func handleTime(attribute interface{}, args []string, fieldValue reflect.Value) 
 	}
 
 	if isIso8601 {
-		var tm string
-		if v.Kind() == reflect.String {
-			tm = v.Interface().(string)
+		if fieldValue.Type() == reflect.TypeOf(new(ptypes.Timestamp)) {
+			var tm string
+			if v.Kind() == reflect.String {
+				tm = v.Interface().(string)
+			} else {
+				return reflect.ValueOf(ptypes.TimestampNow()), ErrInvalidISO8601
+			}
+
+			t, err := time.Parse(iso8601TimeFormat, tm)
+			if err != nil {
+				return reflect.ValueOf(ptypes.TimestampNow()), ErrInvalidISO8601
+			}
+
+			ts, err := ptypes.TimestampProto(t)
+			if err != nil {
+				return reflect.ValueOf(ptypes.TimestampNow()), err
+			}
+			return reflect.ValueOf(ts), nil
 		} else {
-			return reflect.ValueOf(time.Now()), ErrInvalidISO8601
-		}
+			var tm string
+			if v.Kind() == reflect.String {
+				tm = v.Interface().(string)
+			} else {
+				return reflect.ValueOf(time.Now()), ErrInvalidISO8601
+			}
 
-		t, err := time.Parse(iso8601TimeFormat, tm)
-		if err != nil {
-			return reflect.ValueOf(time.Now()), ErrInvalidISO8601
-		}
+			t, err := time.Parse(iso8601TimeFormat, tm)
+			if err != nil {
+				return reflect.ValueOf(time.Now()), ErrInvalidISO8601
+			}
 
-		if fieldValue.Kind() == reflect.Ptr {
-			return reflect.ValueOf(&t), nil
-		}
+			if fieldValue.Kind() == reflect.Ptr {
+				return reflect.ValueOf(&t), nil
+			}
 
-		return reflect.ValueOf(t), nil
+			return reflect.ValueOf(t), nil
+		}
 	}
 
 	var at int64

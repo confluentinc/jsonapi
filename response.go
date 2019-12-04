@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	ptypes "github.com/gogo/protobuf/types"
 )
 
 var (
@@ -331,6 +333,31 @@ func visitModelNode(model interface{}, included *map[string]*Node,
 						node.Attributes[args[1]] = tm.UTC().Format(iso8601TimeFormat)
 					} else {
 						node.Attributes[args[1]] = tm.Unix()
+					}
+				}
+			} else if fieldValue.Type() == reflect.TypeOf(new(ptypes.Timestamp)) {
+				if fieldValue.IsNil() {
+					if omitEmpty {
+						continue
+					}
+
+					node.Attributes[args[1]] = nil
+				} else {
+					tm := fieldValue.Interface().(*ptypes.Timestamp)
+
+					if tm == new(ptypes.Timestamp) && omitEmpty {
+						continue
+					}
+
+					ts, err := ptypes.TimestampFromProto(tm)
+					if err != nil {
+						er = err
+						break
+					}
+					if iso8601 {
+						node.Attributes[args[1]] = ts.UTC().Format(iso8601TimeFormat)
+					} else {
+						node.Attributes[args[1]] = ts.Unix()
 					}
 				}
 			} else {
